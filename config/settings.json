@@ -1,0 +1,16 @@
+{
+  "API Key": {
+    "Services": {
+      "GofileToken": "TOKEN",
+      "PixeldrainAPI": "API-Key",
+      "CatboxUserhash": "your-catbox-userhash-here"
+    }
+  },
+  "Configuration": {
+    "GITHUB_TOKEN": "TOKEN",
+    "GIST_ID": "ID",
+    "MD_FILE": "FILE.md",
+    "FOLDER": "UploadFolder",
+    "COOKIES_FOLDER": "Cookies"
+  }
+}
