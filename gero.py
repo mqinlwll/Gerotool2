@@ -17,6 +17,7 @@ from collections import defaultdict
 import xxhash
 import time
 import threading
+import questionary
 
 # Configuration Setup
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -314,6 +315,59 @@ def save_error_log(error_log):
             json.dump(error_log, f, indent=2)
     except Exception as e:
         print(f"Error writing to error log: {str(e)}")
+
+### Cleanup Function
+
+def cleanup_files(folder, log_file, is_url_download):
+    if not os.path.exists(log_file):
+        print(f"No log file found at {log_file}. Nothing to clean up.")
+        return
+
+    log = load_log(log_file)
+    if not log:
+        print(f"Log file {log_file} is empty. Nothing to clean up.")
+        return
+
+    files_to_delete = []
+
+    if is_url_download:
+        # For URL downloads
+        uploaded_video_ids = set()
+        for data in log.values():
+            for upload in data.get("uploads", []):
+                uploaded_video_ids.add(upload["video_id"])
+
+        for file in Path(folder).glob("*"):
+            if file.is_file() and file.name.startswith("ID_"):
+                video_id = file.stem.split('_', 1)[1]
+                if video_id in uploaded_video_ids:
+                    files_to_delete.append(file)
+    else:
+        # For local uploads
+        uploaded_files = set()
+        for data in log.values():
+            for upload in data.get("uploads", []):
+                uploaded_files.add((upload["file_hash"], upload["file_name"]))
+
+        for file in Path(folder).rglob("*"):
+            if file.is_file():
+                file_hash = compute_file_hash(file)
+                if (file_hash, file.name) in uploaded_files:
+                    files_to_delete.append(file)
+
+    if files_to_delete:
+        print(f"Found {len(files_to_delete)} files to delete in {folder}:")
+        for file in files_to_delete:
+            print(f" - {file}")
+        if questionary.confirm("Are you sure you want to delete these files?").ask():
+            for file in files_to_delete:
+                try:
+                    file.unlink()
+                    print(f"Deleted {file}")
+                except Exception as e:
+                    print(f"Error deleting {file}: {e}")
+    else:
+        print(f"No files to delete in {folder}")
 
 ### Gist Update Function
 
@@ -625,6 +679,16 @@ def main():
             handle_retries(failed_uploads, retry_uploads, retry_wait_minutes=retry_wait_minutes)
 
             update_gist([LOG_FILE, LC_LOG_FILE], md_file, gist_id, github_token)
+
+    # Cleanup after processing
+    if args.url_files:
+        cleanup_folders = [(config['FOLDER'], LOG_FILE, True)]
+    elif args.lc_upload:
+        cleanup_folders = [(args.lc_upload, LC_LOG_FILE, False)]
+
+    if questionary.confirm("Do you want to clean up the local files that have been successfully uploaded?").ask():
+        for folder, log_file, is_url_download in cleanup_folders:
+            cleanup_files(folder, log_file, is_url_download)
 
 if __name__ == "__main__":
     main()
